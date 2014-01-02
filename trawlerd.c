@@ -182,11 +182,11 @@ int trawlerd_fulfill_request(zmq_socket_t src, trequest_t *req, CURL *ch) {
     err |= curl_easy_setopt( ch, CURLOPT_WRITEDATA, req );
     switch( req->method ) {
     case GET:
-        url = concat("http://www.nationstates.net/",req->path,"?",req->query);
+        url = concat(TRAWLER_BASE_URL,req->path,"?",req->query);
         err |= curl_easy_setopt( ch, CURLOPT_URL, url );
         break;
     case POST:
-        url = concat("http://www.nationstates.net/",req->path,"","");
+        url = concat(TRAWLER_BASE_URL,req->path,"","");
         err |= curl_easy_setopt( ch, CURLOPT_URL, url);
         err |= curl_easy_setopt( ch, CURLOPT_POSTFIELDS, req->query );
         break;

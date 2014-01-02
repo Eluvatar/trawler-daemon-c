@@ -28,6 +28,9 @@
 #define TRAWLER_NACK_GENERIC (500)
 #define TRAWLER_NACK_UNSUPPORTED_METHOD (501)
 
+#ifndef TRAWLER_BASE_URL
+#define TRAWLER_BASE_URL ("http://www.nationstates.net/")
+#endif
 #define TRAWLER_DELAY_MSEC (660)
 
 int trawlerd_loop();
