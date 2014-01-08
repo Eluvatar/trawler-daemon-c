@@ -12,6 +12,11 @@ all: daemon
 daemon: $(OBJS)
 	$(CC) -o daemon $(CFLAGS) $(LDFLAGS) $(OBJS)
 
+MOCKNS = '"http://localhost:6260/"'
+
+testdaemon: $(SRCS)
+	$(CC) -o testdaemon $(CFLAGS) -std=gnu99 -DDEBUG $(LDFLAGS) $(SRCS)
+
 depend: .depend
 
 .depend: $(SRCS)

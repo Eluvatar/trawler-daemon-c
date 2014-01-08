@@ -89,16 +89,19 @@ int trawlerd_loop() {
 
 int trawlerd_receive(zmq_socket_t src, trequest_list_t *list) {
     zmsg_t *msg = zmsg_recv(src);
-	zframe_t *client = zmsg_pop(msg);
+    zframe_t *client = zmsg_unwrap(msg);
     zframe_t *content_frame = zmsg_pop(msg);
-	byte *content = zframe_data( content_frame );
-	size_t bufsize = zframe_size( content_frame );
+    byte *content = zframe_data( content_frame );
+    size_t bufsize = zframe_size( content_frame );
     Trawler__Request *preq = trawler__request__unpack(NULL, bufsize, content);
     zmsg_destroy(&msg);
     zframe_destroy(&content_frame);
+    if( preq == NULL ) {
+        return 1;
+    }
     if( preq->method == TRAWLER__REQUEST__METHOD__GET 
         || preq->method == TRAWLER__REQUEST__METHOD__POST ) {
-        trequest_node_t *node = malloc(sizeof(trequest_node_t));
+        trequest_node_t *node = calloc(1,sizeof(trequest_node_t));
         trawlerd_receive_request(client, preq, &(node->req));
         trequest_list_append( list, node );
         trawlerd_ack(src, client, preq->id);
@@ -113,9 +116,13 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
                              trequest_t *treq) {
     treq->client = client;
     trawler__reply__init(&(treq->reply));
-    treq->id = preq->id;
+    treq->reply.req_id = treq->id = preq->id;
     treq->method = preq->method;
     treq->path = strdup(preq->path);
+    treq->reply.headers = NULL;
+    treq->reply_headers_len = 0;
+    treq->reply.response = NULL;
+    treq->reply_response_len = 0;
     if( preq->query != NULL ) {
         treq->query = strdup(preq->query);
     } else {
@@ -138,13 +145,14 @@ static int trawlerd_reply(zmq_socket_t src, zframe_t *client,
                           Trawler__Reply *reply) {
     unsigned int len = trawler__reply__get_packed_size(reply);
     void *buf = malloc(len);
+    zmsg_t *reply_msg = zmsg_new();
+    zframe_t *client_copy = zframe_dup(client);
     zframe_t *reply_frame;
     trawler__reply__pack(reply,buf);
-    reply_frame = zframe_new_zero_copy(buf, len, free_chunk, NULL);
-    zframe_send(&client, src, ZFRAME_REUSE + ZFRAME_MORE);
-    zframe_send(&reply_frame, src, ZFRAME_REUSE);
-    zframe_destroy(&reply_frame);
-    trawler__reply__free_unpacked(buf, NULL);
+    reply_frame = zframe_new_zero_copy( buf, len, free_chunk, NULL);
+    zmsg_add(reply_msg, reply_frame);
+    zmsg_wrap(reply_msg, client_copy);
+    zmsg_send(&reply_msg, src);
     return 0;
 }
 
@@ -170,9 +178,9 @@ static char *concat(const char *a, const char *b, const char *c,
     char *res = strdup(a);
     size_t total = strlen(res)+strlen(b)+strlen(c);
     res = realloc(res,total+1);
-    strcat(res, b);
-    strcat(res, c);
-    strcat(res, d);
+    if(b) strcat(res, b);
+    if(c) strcat(res, c);
+    if(d) strcat(res, d);
     return res;
 }
 
@@ -199,8 +207,7 @@ int trawlerd_fulfill_request(zmq_socket_t src, trequest_t *req, CURL *ch) {
     err |= curl_easy_perform( ch );
     free(url);
     err |= curl_easy_getinfo( ch, CURLINFO_RESPONSE_CODE,
-                              &(req->reply.response) );
-    req->reply.req_id = req->id;
+                              &(req->reply.result) );
     return trawlerd_reply(src, req->client, &(req->reply));
 }
 
@@ -214,18 +221,18 @@ static inline int trawlerd_str_append( char **str, size_t *strlen,
         *str = new;
     }
     *strlen += size*nmemb;
-    return 0;
+    return size*nmemb;
 }
 
-int trawlerd_headers_append(trequest_t *treq, size_t size, size_t nmemb,
-                            void *stream) {
+int trawlerd_headers_append(void *stream, size_t size, size_t nmemb,
+                            trequest_t *treq) {
     return trawlerd_str_append( &(treq->reply.headers),
                                 &(treq->reply_headers_len),
                                 size, nmemb, stream );
 }
 
-int trawlerd_response_append(trequest_t *treq, size_t size, size_t nmemb,
-                             void *stream) {
+int trawlerd_response_append(void *stream, size_t size, size_t nmemb,
+                             trequest_t *treq) {
     return trawlerd_str_append( &(treq->reply.response),
                                 &(treq->reply_response_len),
                                 size, nmemb, stream );
@@ -256,6 +263,9 @@ int trequest_list_peek( trequest_list_t *list, trequest_t **treq ) {
 int trequest_list_shift( trequest_list_t *list ) {
     trequest_node_t *condemned = list->first;
     list->first = condemned->next;
+    if( list->first == NULL ) {
+        list->last = NULL;
+    }
     free( condemned );
     return 0;
 }

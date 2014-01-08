@@ -28,8 +28,10 @@
 #define TRAWLER_NACK_GENERIC (500)
 #define TRAWLER_NACK_UNSUPPORTED_METHOD (501)
 
-#ifndef TRAWLER_BASE_URL
+#ifndef DEBUG
 #define TRAWLER_BASE_URL ("http://www.nationstates.net/")
+#else
+#define TRAWLER_BASE_URL ("http://localhost:6260/")
 #endif
 #define TRAWLER_DELAY_MSEC (660)
 
@@ -84,10 +86,10 @@ int trawlerd_ack(zmq_socket_t src, zframe_t *client, int32_t req_id);
 int trawlerd_nack(zmq_socket_t src, zframe_t *client, int32_t req_id,
                   int32_t result);
 int trawlerd_fulfill_request(zmq_socket_t src, trequest_t *treq, CURL *ch);
-int trawlerd_headers_append(trequest_t *treq, size_t size, size_t nmemb, 
-                            void *stream);
-int trawlerd_response_append(trequest_t *treq, size_t size, size_t nmemb, 
-                             void *stream);
+int trawlerd_headers_append(void *stream, size_t size, size_t nmemb, 
+                            trequest_t *treq);
+int trawlerd_response_append(void *stream, size_t size, size_t nmemb, 
+                             trequest_t *treq);
 
 int trequest_list_new( trequest_list_t **list );
 int trequest_list_append( trequest_list_t *list, trequest_node_t *trnode );
