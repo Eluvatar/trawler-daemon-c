@@ -3,7 +3,7 @@
  *  This file is part of Trawler
  *
  *  Trawler is free software: you can redistribute it and/or modify
- *  it under the terms of hte GNU General Public Licence as published by
+ *  it under the terms of the GNU General Public Licence as published by
  *  the Free Software Foundation, either version 3 of the License, or
  *  (at your option) any later version.
  *
@@ -36,68 +36,84 @@ int trawlerd_init(CURL **ch, zmq_socket_t *server) {
         return err;
     ctx = zctx_new();
     *server = zsocket_new( ctx, ZMQ_ROUTER );
-    assert(5557 == zsocket_bind( *server, "tcp://*:5557" ));
+    assert(TRAWLER_PORT == zsocket_bind( *server, "tcp://*"TRAWLER_PORT ));
     return 0;
 }
 
-static inline void set_timeout( int *ret, struct timeval *then, struct timeval *now ) {
-    *ret = TRAWLER_DELAY_MSEC + 1000*(then->tv_sec - now->tv_sec)
-           + (then->tv_usec - now->tv_usec)/1000;
+static inline void set_timeout( int *ret, int64_t *then, int64_t *now ) {
+    *ret = TRAWLER_DELAY_MSEC + then - now;
 }
 
 int trawlerd_loop() {
-    trequest_list_t *list;
-    int timeout, err;
-    struct timeval then, now;
+    trequest_list_t *requests;
+    int timeout;
+    int64_t then, now;
     CURL *ch;
     zmq_socket_t server;
+    zhash_t *clients = zhash_new();
+    if( clients == NULL ) {
+        return 1;
+    }
 
-    trequest_list_new( &list );
+    trequest_list_new( &requests );
     trawlerd_init( &ch, &server );
 
-    err=gettimeofday( &now, NULL);
-    if( err ) exit( err );
+    now = zclock_time();
     then = now;
     timeout = TRAWLER_DELAY_MSEC;
 
     while( 1 ) {
         trequest_t *active_request;
-        trequest_list_peek(list, &active_request);
+        trequest_list_peek(requests, &active_request);
         if( active_request == NULL ) {
-            trawlerd_receive(server, list);
+            trawlerd_receive(server, clients, requests);
         } else {
             bool ready = zsocket_poll(server, timeout);
             if( ready ) {
                 set_timeout( &timeout, &then, &now );
 
-                trawlerd_receive(server, list);
-                err=gettimeofday( &now, NULL);
-                if( err ) exit( err );
+                trawlerd_receive(server, clients, requests);
+                now = zclock_time();
             } else {
-                trequest_list_peek(list, &active_request);
+                trequest_list_peek(requests, &active_request);
                 assert( active_request != NULL );
 
                 then = now;
                 timeout = TRAWLER_DELAY_MSEC;
 
-                trawlerd_fulfill_request(server, active_request, ch);
-                trequest_list_shift( list );
+                trawlerd_fulfill_request(server, clients, active_request, ch);
+                trequest_list_shift( requests );
             }
         }
     }
 }
 
-int trawlerd_receive(zmq_socket_t src, trequest_list_t *list) {
+int trawlerd_receive(zmq_socket_t src, zhash_t *clients, trequest_list_t *list) {
     zmsg_t *msg = zmsg_recv(src);
     zframe_t *client = zmsg_unwrap(msg);
+    char *client_hex = zframe_strhex(client);
     zframe_t *content_frame = zmsg_pop(msg);
     byte *content = zframe_data( content_frame );
     size_t bufsize = zframe_size( content_frame );
-    Trawler__Request *preq = trawler__request__unpack(NULL, bufsize, content);
+    Trawler__Login *login = NULL;
+    Trawler__Request *preq = NULL;
+	char *user_agent = zhash_lookup(clients, client_hex);
+    if( user_agent ) {
+		preq = trawler__request__unpack(NULL, bufsize, content);
+    } else {
+        login = trawler__login__unpack(NULL, bufsize, content);
+        if( login != NULL ) {
+             zhash_insert( clients, client_hex, login->user_agent );
+        }
+    }
+    free(client_hex);
     zmsg_destroy(&msg);
     zframe_destroy(&content_frame);
     if( preq == NULL ) {
-        return 1;
+        if( login == NULL ) {
+            return 1;
+        }
+        return 0;
     }
     if( preq->method == TRAWLER__REQUEST__METHOD__GET 
         || preq->method == TRAWLER__REQUEST__METHOD__POST ) {
@@ -184,9 +200,13 @@ static char *concat(const char *a, const char *b, const char *c,
     return res;
 }
 
-int trawlerd_fulfill_request(zmq_socket_t src, trequest_t *req, CURL *ch) {
+int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *clients, trequest_t *req,
+                             CURL *ch) {
     int err=0;
     char *url = NULL;
+    char *client_hex = zframe_strhex(req->client);
+	char * user_agent = zhash_lookup(clients, client_hex);
+    err |= curl_easy_setopt( ch, CURLOPT_USERAGENT, user_agent );
     err |= curl_easy_setopt( ch, CURLOPT_WRITEDATA, req );
     switch( req->method ) {
     case GET:
@@ -208,6 +228,7 @@ int trawlerd_fulfill_request(zmq_socket_t src, trequest_t *req, CURL *ch) {
     free(url);
     err |= curl_easy_getinfo( ch, CURLINFO_RESPONSE_CODE,
                               &(req->reply.result) );
+    free(client_hex);
     return trawlerd_reply(src, req->client, &(req->reply));
 }
 

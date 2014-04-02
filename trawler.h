@@ -33,7 +33,9 @@
 #else
 #define TRAWLER_BASE_URL ("http://localhost:6260/")
 #endif
+#define TRAWLER_PORT 5557
 #define TRAWLER_DELAY_MSEC (660)
+#define TRAWLER_VERSION ("0.1.0")
 
 int trawlerd_loop();
 
@@ -79,13 +81,14 @@ int trawlerd_init(CURL **ch, zmq_socket_t *server);
 
 /* This function is called when a socket has something. It determines which
  * _receive_ function to call and calls it. */
-int trawlerd_receive(zmq_socket_t src, trequest_list_t *list);
+int trawlerd_receive(zmq_socket_t src, zhash_t *clients, trequest_list_t *list);
 int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq, 
                              trequest_t *treq);
 int trawlerd_ack(zmq_socket_t src, zframe_t *client, int32_t req_id);
 int trawlerd_nack(zmq_socket_t src, zframe_t *client, int32_t req_id,
                   int32_t result);
-int trawlerd_fulfill_request(zmq_socket_t src, trequest_t *treq, CURL *ch);
+int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *clients,
+                             trequest_t *treq, CURL *ch);
 int trawlerd_headers_append(void *stream, size_t size, size_t nmemb, 
                             trequest_t *treq);
 int trawlerd_response_append(void *stream, size_t size, size_t nmemb, 
