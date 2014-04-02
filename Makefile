@@ -4,7 +4,7 @@ PROTODIR = protocol
 
 OBJS = trawlerd.o $(GENDIR)/trawler.pb-c.o
 SRCS = trawlerd.c $(GENDIR)/trawler.pb-c.c
-CFLAGS += -I $(GENDIR) -g -Wall -Wextra -Werror -pedantic # -std=gnu99
+CFLAGS += -I $(GENDIR) -g -Wall -Wextra -Werror -pedantic -std=gnu99
 LDFLAGS += -lzmq -lczmq -lcurl -lprotobuf-c
 
 all: daemon
