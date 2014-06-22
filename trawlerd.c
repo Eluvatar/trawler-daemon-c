@@ -263,7 +263,7 @@ int trawlerd_logout(trawler_t *trawler, const char *client_hex,
 static char *concat(const char *a, const char *b, const char *c, 
                     const char *d) {
     char *res = strdup(a);
-    size_t total = strlen(res)+strlen(b)+strlen(c);
+    size_t total = strlen(res)+strlen(b)+strlen(c)+strlen(d);
     res = realloc(res,total+1);
     if(b) strcat(res, b);
     if(c) strcat(res, c);
