@@ -2,4 +2,5 @@ language: c
 before_install:
   - sudo apt-get update -qq
   - sudo apt-get install -y protobuf-c-compiler
+  - sudo apt-get install -y libzmq libzmq-devel 
 script: make && make testdaemon
