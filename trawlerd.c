@@ -277,7 +277,7 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
     char *url = NULL;
     char *client_hex = zframe_strhex(req->client);
     tsession_t *session = zhash_lookup(sessions, client_hex);
-	char * user_agent = session->user_agent;
+    char * user_agent = session->user_agent;
     err |= curl_easy_setopt( ch, CURLOPT_USERAGENT, user_agent );
     err |= curl_easy_setopt( ch, CURLOPT_WRITEDATA, req );
     switch( req->method ) {
