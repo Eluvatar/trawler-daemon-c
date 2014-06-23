@@ -68,8 +68,6 @@ typedef struct trequest {
     zframe_t *client ;
     /* reply being built for the response */
     Trawler__Reply reply;
-    size_t reply_headers_len;
-    size_t reply_response_len;
     /* arguments from client */
     int32_t id;
     method_t method;

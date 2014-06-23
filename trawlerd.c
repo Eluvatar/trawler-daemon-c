@@ -195,10 +195,10 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
     treq->reply.req_id = treq->id = preq->id;
     treq->method = preq->method;
     treq->path = strdup(preq->path);
-    treq->reply.headers = NULL;
-    treq->reply_headers_len = 0;
-    treq->reply.response = NULL;
-    treq->reply_response_len = 0;
+    treq->reply.headers.data = NULL;
+    treq->reply.headers.len = 0;
+    treq->reply.response.data = NULL;
+    treq->reply.response.len = 0;
     if( preq->query != NULL ) {
         treq->query = strdup(preq->query);
     } else {
@@ -263,7 +263,8 @@ int trawlerd_logout(trawler_t *trawler, const char *client_hex,
 static char *concat(const char *a, const char *b, const char *c, 
                     const char *d) {
     char *res = strdup(a);
-    size_t total = strlen(res)+strlen(b)+strlen(c)+strlen(d);
+    size_t total = strlen(res) 
+        + (b?strlen(b):0) + (c?strlen(c):0) + (d?strlen(d):0);
     res = realloc(res,total+1);
     if(b) strcat(res, b);
     if(c) strcat(res, c);
@@ -296,6 +297,13 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
     if( req->session != NULL ) {
         err |= curl_easy_setopt( ch, CURLOPT_COOKIE, req->session );
     }
+    req->reply.has_response = true;
+    if( req->headers ) {
+        curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, trawlerd_headers_append);
+        req->reply.has_headers = true;
+    } else {
+        curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, NULL );
+    }
     err |= curl_easy_perform( ch );
     free(url);
     err |= curl_easy_getinfo( ch, CURLINFO_RESPONSE_CODE,
@@ -305,11 +313,11 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
     return trawlerd_reply(src, req->client, &(req->reply));
 }
 
-static inline int trawlerd_str_append( char **str, size_t *strlen, 
+static inline int trawlerd_str_append( uint8_t **str, size_t *strlen, 
                                        const size_t size, const size_t nmemb,
                                        void *stream) {
-    char *cur = *str;
-    char *new = realloc( cur, *strlen + size*nmemb );
+    uint8_t *cur = *str;
+    uint8_t *new = realloc( cur, *strlen + size*nmemb );
     memmove( new+*strlen, stream, size*nmemb );
     if( cur != new ) {
         *str = new;
@@ -320,15 +328,15 @@ static inline int trawlerd_str_append( char **str, size_t *strlen,
 
 int trawlerd_headers_append(void *stream, size_t size, size_t nmemb,
                             trequest_t *treq) {
-    return trawlerd_str_append( &(treq->reply.headers),
-                                &(treq->reply_headers_len),
+    return trawlerd_str_append( &(treq->reply.headers.data),
+                                &(treq->reply.headers.len),
                                 size, nmemb, stream );
 }
 
 int trawlerd_response_append(void *stream, size_t size, size_t nmemb,
                              trequest_t *treq) {
-    return trawlerd_str_append( &(treq->reply.response),
-                                &(treq->reply_response_len),
+    return trawlerd_str_append( &(treq->reply.response.data),
+                                &(treq->reply.response.len),
                                 size, nmemb, stream );
 }
 
