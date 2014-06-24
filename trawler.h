@@ -49,7 +49,7 @@
 #define TRAWLER_DELAY_MSEC (660)
 #define TRAWLER_VERSION ("0.1.0")
 
-int trawlerd_loop();
+int trawlerd_loop(long verbose);
 
 typedef void * zmq_socket_t;
 typedef enum {
@@ -100,7 +100,7 @@ typedef struct trawler {
 } trawler_t;
 
 /* This function is called at the beginning of trawlerd_loop to set things up. */
-int trawlerd_init(CURL **ch, zmq_socket_t *server);
+int trawlerd_init(CURL **ch, zmq_socket_t *server, long verbose);
 
 /* This function is called when a socket has something. It determines which
  * _receive_ function to call and calls it. */

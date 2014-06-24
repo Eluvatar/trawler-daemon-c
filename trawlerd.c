@@ -20,17 +20,26 @@
 
 #include "trawler.h"
 
-int main(/*const int argc, const char **argv*/) {
-    return trawlerd_loop();
+int main(const int argc, const char **argv) {
+    long verbose = 0;
+    if( argc > 1 ) {
+        for( int i=0; i<argc; i++ ) {
+            if( argv[i][0] == '-' && argv[i][1] == 'v' && argv[i][2] == '\0' ) {
+                verbose = 1;
+            }
+        }
+    }
+    return trawlerd_loop(verbose);
 }
 
-int trawlerd_init(CURL **ch, zmq_socket_t *server) {
+int trawlerd_init(CURL **ch, zmq_socket_t *server, long verbose) {
     int err;
     zctx_t *ctx;
     err = curl_global_init(CURL_GLOBAL_NOTHING);
     if( err != CURLE_OK )
         return err;
     *ch = curl_easy_init();
+    err = curl_easy_setopt(*ch, CURLOPT_VERBOSE, verbose);
     err = curl_easy_setopt(*ch, CURLOPT_WRITEFUNCTION, trawlerd_response_append);
     if( err != CURLE_OK )
         return err;
@@ -46,7 +55,7 @@ static inline void set_timeout( int *ret, int64_t *then, int64_t *now ) {
     *ret = TRAWLER_DELAY_MSEC + then - now;
 }
 
-int trawlerd_loop() {
+int trawlerd_loop(long verbose) {
     trequest_list_t *requests;
     int timeout;
     int64_t then, now;
@@ -59,7 +68,7 @@ int trawlerd_loop() {
     }
 
     trequest_list_new( &requests );
-    trawlerd_init( &ch, &server );
+    trawlerd_init( &ch, &server, verbose );
 
     trawler.req_list = requests;
     trawler.src = server;
