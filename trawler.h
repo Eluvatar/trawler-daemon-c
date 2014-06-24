@@ -27,6 +27,7 @@
 
 #define TRAWLER_ACK_RESULT (200)
 #define TRAWLER_LOGOUT_TIMEOUT (408)
+#define TRAWLER_LOGOUT_SHUTDOWN (503)
 #define TRAWLER_NACK_GENERIC (500)
 #define TRAWLER_NACK_UNSUPPORTED_METHOD (501)
 
@@ -115,7 +116,8 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
 int trawlerd_ack(zmq_socket_t src, zframe_t *client, int32_t req_id);
 int trawlerd_nack(zmq_socket_t src, zframe_t *client, int32_t req_id,
                   int32_t result);
-int trawlerd_logout(trawler_t *trawler, const char *client_hex, tsession_t *session);
+int trawlerd_logout(trawler_t *trawler, const char *client_hex, tsession_t *session,
+                    int32_t result);
 int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions,
                              trequest_t *treq, CURL *ch);
 int trawlerd_headers_append(void *stream, size_t size, size_t nmemb, 
@@ -127,3 +129,6 @@ int trequest_list_new( trequest_list_t **list );
 int trequest_list_append( trequest_list_t *list, trequest_node_t *trnode );
 int trequest_list_peek( trequest_list_t *list, trequest_t **treq );
 int trequest_list_shift( trequest_list_t *list );
+
+int trawlerd_reap(trawler_t *trawler);
+int trawlerd_register_sighandler(trawler_t *trawler);
