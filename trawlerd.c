@@ -57,6 +57,8 @@ static inline void set_timeout( int *ret, int64_t *then, int64_t *now ) {
     *ret = TRAWLER_DELAY_MSEC + then - now;
 }
 
+static int trawler_interrupted = 0;
+
 int trawlerd_loop(long verbose) {
     trequest_list_t *requests;
     int timeout;
@@ -70,6 +72,10 @@ int trawlerd_loop(long verbose) {
     }
 
     trequest_list_new( &requests );
+
+    // the below call sets global state -- do not run multiple trawlerd_loops
+    trawlerd_register_sighandler();
+
     trawlerd_init( &ch, &server, verbose );
 
     trawler.req_list = requests;
@@ -79,10 +85,8 @@ int trawlerd_loop(long verbose) {
     then = now;
     timeout = TRAWLER_DELAY_MSEC;
 
-    // the below call sets global state -- do not run multiple trawlerd_loops
-    trawlerd_register_sighandler( &trawler );
 
-    while( ! zctx_interrupted ) {
+    while( ! trawler_interrupted ) {
         trequest_t *active_request;
         trequest_list_peek(requests, &active_request);
         if( active_request == NULL ) {
@@ -410,20 +414,24 @@ static int trawlerd_reap_logout_fn(__attribute__((unused))const char *client_hex
 }
 
 static int trawlerd_shutdown(trawler_t *trawler) {
-    zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, &trawler);
+    zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, trawler);
     //zhash_destroy(trawler->sessions);
     return 0;
 }
 
-static trawler_t *_trawler;
+// static trawler_t *_trawler;
 static void trawlerd_sighandler(__attribute__((unused))int signal) {
-    trawlerd_shutdown(_trawler);
+    //trawlerd_shutdown(_trawler);
+    trawler_interrupted = 1;
 }
 
-int trawlerd_register_sighandler(trawler_t *trawler) {
+int trawlerd_register_sighandler() {
     // Is incompatible with multiple daemons running in the same process...
     // but the owning of the port already blocks that :P
-    _trawler = trawler;
+    // _trawler = trawler;
+    trawler_interrupted = 0;
+    /// SO MUCH RAGE
+    zsys_handler_reset();
     zsys_handler_set(trawlerd_sighandler);
     return 0;
 }

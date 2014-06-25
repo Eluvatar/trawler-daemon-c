@@ -131,4 +131,4 @@ int trequest_list_peek( trequest_list_t *list, trequest_t **treq );
 int trequest_list_shift( trequest_list_t *list );
 
 int trawlerd_reap(trawler_t *trawler);
-int trawlerd_register_sighandler(trawler_t *trawler);
+int trawlerd_register_sighandler();
