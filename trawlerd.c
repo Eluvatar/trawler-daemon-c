@@ -1,4 +1,4 @@
-/*  Copyright 2013 Eluvatar
+/*  Copyright 2013-2014 Eluvatar
  *  
  *  This file is part of Trawler
  *
@@ -19,6 +19,8 @@
 #include <zmq.h>
 
 #include "trawler.h"
+
+static int trawlerd_shutdown(trawler_t *trawler);
 
 int main(const int argc, const char **argv) {
     long verbose = 0;
@@ -77,9 +79,10 @@ int trawlerd_loop(long verbose) {
     then = now;
     timeout = TRAWLER_DELAY_MSEC;
 
+    // the below call sets global state -- do not run multiple trawlerd_loops
     trawlerd_register_sighandler( &trawler );
 
-    while( 1 ) {
+    while( ! zctx_interrupted ) {
         trequest_t *active_request;
         trequest_list_peek(requests, &active_request);
         if( active_request == NULL ) {
@@ -105,13 +108,20 @@ int trawlerd_loop(long verbose) {
         }
         trawlerd_reap( &trawler );
     }
+    return trawlerd_shutdown( &trawler );
 }
 
 int trawlerd_receive( trawler_t *trawler ) {
+    if( zctx_interrupted ) {
+        return 1;
+    }
     zmq_socket_t src = trawler->src;
     zhash_t *sessions = trawler->sessions;
     trequest_list_t *list = trawler->req_list;
     zmsg_t *msg = zmsg_recv(src);
+    if( msg == NULL ) {
+        return 1;
+    }
     zframe_t *client = zmsg_unwrap(msg);
     char *client_hex = zframe_strhex(client);
     zframe_t *content_frame = zmsg_pop(msg);
@@ -127,6 +137,8 @@ int trawlerd_receive( trawler_t *trawler ) {
         login = trawler__login__unpack(NULL, bufsize, content);
         if( login != NULL ) {
    	        trawlerd_login(trawler, client, client_hex, login);
+        } else {
+            trawlerd_logout(src, client, TRAWLER_LOGOUT_LOGIN_SYNTAX);
         }
     }
     free(client_hex);
@@ -134,7 +146,7 @@ int trawlerd_receive( trawler_t *trawler ) {
     zframe_destroy(&content_frame);
     if( preq == NULL ) {
         if( login == NULL ) {
-            return 1;
+            return 2;
         }
         return 0;
     }
@@ -163,8 +175,9 @@ static int trawlerd_reap_inactive_fn(const char *client_hex, void *v, void *r) {
     const time_t now = reaping->now;
     if( session->req_count == 0 
         && session->last_activity > now + TRAWLER_SESSION_TIMEOUT ) {
-        trawlerd_logout(reaping->trawler, client_hex, session, 
+        trawlerd_logout(reaping->trawler->src, session->client, 
                         TRAWLER_LOGOUT_TIMEOUT);
+        zhash_delete( reaping->trawler->sessions, client_hex );
     }
     return 0;
 }
@@ -241,11 +254,13 @@ static int trawlerd_reply(zmq_socket_t src, zframe_t *client,
     reply_frame = zframe_new_zero_copy( buf, len, free_chunk, NULL);
     zmsg_add(reply_msg, reply_frame);
     zmsg_wrap(reply_msg, client_copy);
-    zmsg_send(&reply_msg, src);
-    return 0;
+    return zmsg_send(&reply_msg, src);
 }
 
 int trawlerd_ack(zmq_socket_t src, zframe_t *client, int32_t req_id) {
+    if( zctx_interrupted ) {
+        return 1;
+    }
     Trawler__Reply reply = TRAWLER__REPLY__INIT;
     reply.reply_type = TRAWLER__REPLY__REPLY_TYPE__Ack;
     reply.req_id = req_id;
@@ -255,6 +270,9 @@ int trawlerd_ack(zmq_socket_t src, zframe_t *client, int32_t req_id) {
 
 int trawlerd_nack(zmq_socket_t src, zframe_t *client,  int32_t req_id, 
                   int32_t result) {
+    if( zctx_interrupted ) {
+        return 1;
+    }
     Trawler__Reply reply = TRAWLER__REPLY__INIT;
     reply.reply_type = TRAWLER__REPLY__REPLY_TYPE__Nack;
     reply.req_id = req_id;
@@ -262,15 +280,12 @@ int trawlerd_nack(zmq_socket_t src, zframe_t *client,  int32_t req_id,
     return trawlerd_reply(src, client, &reply);
 }
 
-int trawlerd_logout(trawler_t *trawler, const char *client_hex, 
-                    tsession_t *session, int32_t result) {
+int trawlerd_logout(zmq_socket_t src, zframe_t *client, int32_t result) {
     Trawler__Reply reply = TRAWLER__REPLY__INIT;
     reply.reply_type = TRAWLER__REPLY__REPLY_TYPE__Logout;
     reply.req_id = 0;
     reply.result = result;
-    int res = trawlerd_reply(trawler->src, session->client, &reply);
-    zhash_delete( trawler->sessions, client_hex );
-    return res;
+    return trawlerd_reply(src, client, &reply);
 }
 
 static char *concat(const char *a, const char *b, const char *c, 
@@ -386,15 +401,17 @@ int trequest_list_shift( trequest_list_t *list ) {
     return 0;
 }
 
-static int trawlerd_reap_logout_fn(const char *client_hex, void *v, void *t) {
+static int trawlerd_reap_logout_fn(__attribute__((unused))const char *client_hex,
+                                   void *v, void *t) {
     tsession_t *session = (tsession_t*) v;
     trawler_t *trawler = (trawler_t *) t;
-    trawlerd_logout(trawler, client_hex, session, TRAWLER_LOGOUT_SHUTDOWN);
+    trawlerd_logout(trawler->src, session->client, TRAWLER_LOGOUT_SHUTDOWN);
     return 0;
 }
 
 static int trawlerd_shutdown(trawler_t *trawler) {
     zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, &trawler);
+    //zhash_destroy(trawler->sessions);
     return 0;
 }
 
@@ -407,18 +424,6 @@ int trawlerd_register_sighandler(trawler_t *trawler) {
     // Is incompatible with multiple daemons running in the same process...
     // but the owning of the port already blocks that :P
     _trawler = trawler;
-    if( SIG_ERR == signal(SIGTERM , trawlerd_sighandler)
-        || SIG_ERR == signal(SIGTERM , trawlerd_sighandler)
-        || SIG_ERR == signal(SIGINT, trawlerd_sighandler)
-        || SIG_ERR == signal(SIGQUIT, trawlerd_sighandler) 
-        || SIG_ERR == signal(SIGILL, trawlerd_sighandler)
-        || SIG_ERR == signal(SIGABRT, trawlerd_sighandler)
-        || SIG_ERR == signal(SIGSEGV, trawlerd_sighandler) 
-        || SIG_ERR == signal(SIGPIPE, trawlerd_sighandler) 
-        || SIG_ERR == signal(SIGBUS, trawlerd_sighandler) )
-    {
-        return 3;
-    }
+    zsys_handler_set(trawlerd_sighandler);
     return 0;
 }
-
