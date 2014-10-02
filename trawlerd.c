@@ -332,14 +332,18 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
     req->reply.has_response = true;
     if( req->headers ) {
         curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, trawlerd_headers_append);
+        curl_easy_setopt( ch, CURLOPT_HEADERDATA, req );
         req->reply.has_headers = true;
     } else {
         curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, NULL );
+        curl_easy_setopt( ch, CURLOPT_HEADERDATA, NULL );
     }
     err |= curl_easy_perform( ch );
     free(url);
+    long result;
     err |= curl_easy_getinfo( ch, CURLINFO_RESPONSE_CODE,
-                              &(req->reply.result) );
+                              &result );
+    req->reply.result = result;
     session->req_count--;
     free(client_hex);
     return trawlerd_reply(src, req->client, &(req->reply));
