@@ -317,18 +317,18 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
     case GET:
         url = concat(TRAWLER_BASE_URL,req->path,"?",req->query);
         err |= curl_easy_setopt( ch, CURLOPT_URL, url );
+        err |= curl_easy_setopt( ch, CURLOPT_HTTPGET, 1 );
         break;
     case POST:
         url = concat(TRAWLER_BASE_URL,req->path,"","");
         err |= curl_easy_setopt( ch, CURLOPT_URL, url);
         err |= curl_easy_setopt( ch, CURLOPT_POSTFIELDS, req->query );
+        err |= curl_easy_setopt( ch, CURLOPT_POST, 1 );
         break;
     default:
         return -1; /*TODO come up with return code for this 'impossible' case*/
     }
-    if( req->session != NULL ) {
-        err |= curl_easy_setopt( ch, CURLOPT_COOKIE, req->session );
-    }
+    err |= curl_easy_setopt( ch, CURLOPT_COOKIE, req->session );
     req->reply.has_response = true;
     if( req->headers ) {
         curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, trawlerd_headers_append);
