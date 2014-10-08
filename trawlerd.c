@@ -146,6 +146,7 @@ int trawlerd_receive( trawler_t *trawler ) {
             trawler__login__free_unpacked(login, NULL);
         } else {
             trawlerd_logout(src, client, TRAWLER_LOGOUT_LOGIN_SYNTAX);
+            zframe_destroy( &client );
         }
     }
     free(client_hex);
@@ -166,7 +167,11 @@ int trawlerd_receive( trawler_t *trawler ) {
         trawlerd_ack(src, client, preq->id);
     } else {
         trawlerd_nack(src, client, preq->id, TRAWLER_NACK_UNSUPPORTED_METHOD);
+        zframe_destroy( &client );
     }
+    free(preq->path);
+    free(preq->query);
+    free(preq->session);
     trawler__request__free_unpacked(preq, NULL);
     return 0;
 }
@@ -247,6 +252,7 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
 }
 
 int trequest_destroy( trequest_t *treq ) {
+    zframe_destroy( &(treq->client) );
     free( treq->reply.headers.data );
     free( treq->reply.response.data );
     free( treq->path );
@@ -438,6 +444,7 @@ static int trawlerd_reap_logout_fn(__attribute__((unused))const char *client_hex
     tsession_t *session = (tsession_t*) v;
     trawler_t *trawler = (trawler_t *) t;
     trawlerd_logout(trawler->src, session->client, TRAWLER_LOGOUT_SHUTDOWN);
+    zframe_destroy( &(session->client) );
     return 0;
 }
 
