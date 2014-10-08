@@ -98,7 +98,7 @@ typedef struct tsession {
 typedef struct trawler {
     zmq_socket_t src;
     trequest_list_t *req_list;
-	zhash_t *sessions;
+    zhash_t *sessions;
 } trawler_t;
 
 /* This function is called at the beginning of trawlerd_loop to set things up. */
