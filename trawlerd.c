@@ -243,6 +243,15 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
     return 0;
 }
 
+int trequest_destroy( trequest_t *treq ) {
+    zframe_destroy( &(treq->client) );
+    trawler__reply__free_unpacked( &(treq->reply), NULL );
+    free( treq->path );
+    free( treq->query );
+    free( treq->session );
+    return 0;
+}
+
 static void free_chunk( void *data, void *arg __attribute__((unused))) {
     free(data);
 }
@@ -416,7 +425,7 @@ int trequest_list_shift( trequest_list_t *list ) {
     if( list->first == NULL ) {
         list->last = NULL;
     }
-    // TODO check if this properly deals with condemned->req.client
+    trequest_destroy( &condemned->req );
     free( condemned );
     return 0;
 }
