@@ -150,7 +150,6 @@ int trawlerd_receive( trawler_t *trawler ) {
     zmsg_destroy(&msg);
     zframe_destroy(&content_frame);
     if( preq == NULL ) {
-        zframe_destroy(&client);
         if( login == NULL ) {
             return 2;
         }
