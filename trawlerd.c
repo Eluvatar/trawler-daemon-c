@@ -246,6 +246,8 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
 
 int trequest_destroy( trequest_t *treq ) {
     zframe_destroy( &(treq->client) );
+    // TODO Check if treq->reply.headers.data or treq->reply.response.data need
+    // to be freed
     trawler__reply__free_unpacked( &(treq->reply), NULL );
     free( treq->path );
     free( treq->query );
@@ -441,7 +443,7 @@ static int trawlerd_reap_logout_fn(__attribute__((unused))const char *client_hex
 
 static int trawlerd_shutdown(trawler_t *trawler) {
     zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, trawler);
-    //zhash_destroy(trawler->sessions);
+    zhash_destroy(trawler->sessions);
     trequest_list_destroy(&(trawler->req_list));
     zmq_close(trawler->src);
     return 0;
