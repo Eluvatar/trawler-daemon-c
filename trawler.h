@@ -126,6 +126,7 @@ int trawlerd_response_append(void *stream, size_t size, size_t nmemb,
                              trequest_t *treq);
 
 int trequest_list_new( trequest_list_t **list );
+int trequest_list_destroy( trequest_list_t **list );
 int trequest_list_append( trequest_list_t *list, trequest_node_t *trnode );
 int trequest_list_peek( trequest_list_t *list, trequest_t **treq );
 int trequest_list_shift( trequest_list_t *list );

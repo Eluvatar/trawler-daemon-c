@@ -381,6 +381,18 @@ int trequest_list_new( trequest_list_t **list ) {
     return 0;
 }
 
+int trequest_list_destroy( trequest_list_t **list ) {
+    int err = 0;
+    while( err == 0 && (*list)->first != NULL ) {
+        err = trequest_list_shift( *list );
+    }
+    if( err == 0 ) {
+        free( *list );
+        *list = NULL;
+    }
+    return err;
+}
+
 int trequest_list_append( trequest_list_t *list, trequest_node_t *trnode ) {
     if( list->first == NULL ) {
         assert( list->last == NULL );
@@ -420,6 +432,7 @@ static int trawlerd_reap_logout_fn(__attribute__((unused))const char *client_hex
 static int trawlerd_shutdown(trawler_t *trawler) {
     zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, trawler);
     //zhash_destroy(trawler->sessions);
+    trequest_list_destroy(&(trawler->req_list));
     return 0;
 }
 
