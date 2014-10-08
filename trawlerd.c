@@ -20,7 +20,7 @@
 
 #include "trawler.h"
 
-static int trawlerd_shutdown(trawler_t *trawler);
+static int trawlerd_shutdown(trawler_t *trawler, CURL *ch);
 
 int main(const int argc, const char **argv) {
     long verbose = 0;
@@ -112,7 +112,7 @@ int trawlerd_loop(long verbose) {
         }
         trawlerd_reap( &trawler );
     }
-    return trawlerd_shutdown( &trawler );
+    return trawlerd_shutdown( &trawler, ch );
 }
 
 int trawlerd_receive( trawler_t *trawler ) {
@@ -441,11 +441,12 @@ static int trawlerd_reap_logout_fn(__attribute__((unused))const char *client_hex
     return 0;
 }
 
-static int trawlerd_shutdown(trawler_t *trawler) {
+static int trawlerd_shutdown(trawler_t *trawler, CURL *ch) {
     zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, trawler);
-    zhash_destroy(trawler->sessions);
+    zhash_destroy( &(trawler->sessions) );
     trequest_list_destroy(&(trawler->req_list));
     zmq_close(trawler->src);
+    curl_easy_cleanup( ch );
     return 0;
 }
 
