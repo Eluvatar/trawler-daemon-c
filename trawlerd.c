@@ -141,6 +141,7 @@ int trawlerd_receive( trawler_t *trawler ) {
         login = trawler__login__unpack(NULL, bufsize, content);
         if( login != NULL ) {
             trawlerd_login(trawler, client, client_hex, login);
+            trawler__login__free_unpacked(login, NULL);
         } else {
             trawlerd_logout(src, client, TRAWLER_LOGOUT_LOGIN_SYNTAX);
         }
