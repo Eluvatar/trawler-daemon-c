@@ -150,6 +150,7 @@ int trawlerd_receive( trawler_t *trawler ) {
     zmsg_destroy(&msg);
     zframe_destroy(&content_frame);
     if( preq == NULL ) {
+        zframe_destroy(&client);
         if( login == NULL ) {
             return 2;
         }
@@ -245,10 +246,8 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
 }
 
 int trequest_destroy( trequest_t *treq ) {
-    zframe_destroy( &(treq->client) );
-    // TODO Check if treq->reply.headers.data or treq->reply.response.data need
-    // to be freed
-    trawler__reply__free_unpacked( &(treq->reply), NULL );
+    free( treq->reply.headers.data );
+    free( treq->reply.response.data );
     free( treq->path );
     free( treq->query );
     free( treq->session );
@@ -428,7 +427,7 @@ int trequest_list_shift( trequest_list_t *list ) {
     if( list->first == NULL ) {
         list->last = NULL;
     }
-    trequest_destroy( &condemned->req );
+    trequest_destroy( &(condemned->req) );
     free( condemned );
     return 0;
 }
