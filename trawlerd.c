@@ -65,7 +65,7 @@ int trawlerd_loop(long verbose) {
     int64_t then, now;
     CURL *ch;
     zmq_socket_t server;
-	trawler_t trawler;
+    trawler_t trawler;
     trawler.sessions = zhash_new();
     if( trawler.sessions == NULL ) {
         return 1;
@@ -133,14 +133,14 @@ int trawlerd_receive( trawler_t *trawler ) {
     size_t bufsize = zframe_size( content_frame );
     Trawler__Login *login = NULL;
     Trawler__Request *preq = NULL;
-	tsession_t *session = zhash_lookup(sessions, client_hex);
+    tsession_t *session = zhash_lookup(sessions, client_hex);
     if( session != NULL ) {
-		preq = trawler__request__unpack(NULL, bufsize, content);
+        preq = trawler__request__unpack(NULL, bufsize, content);
         trawlerd_update_last_activity(session);
     } else {
         login = trawler__login__unpack(NULL, bufsize, content);
         if( login != NULL ) {
-   	        trawlerd_login(trawler, client, client_hex, login);
+            trawlerd_login(trawler, client, client_hex, login);
         } else {
             trawlerd_logout(src, client, TRAWLER_LOGOUT_LOGIN_SYNTAX);
         }
