@@ -442,6 +442,7 @@ static int trawlerd_shutdown(trawler_t *trawler) {
     zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, trawler);
     //zhash_destroy(trawler->sessions);
     trequest_list_destroy(&(trawler->req_list));
+    zmq_close(trawler->src);
     return 0;
 }
 
