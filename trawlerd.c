@@ -20,7 +20,7 @@
 
 #include "trawler.h"
 
-static int trawlerd_shutdown(trawler_t *trawler, CURL *ch);
+static int trawlerd_shutdown(trawler_t *trawler, zctx_t **ctx, CURL *ch);
 
 int main(const int argc, const char **argv) {
     long verbose = 0;
@@ -34,7 +34,7 @@ int main(const int argc, const char **argv) {
     return trawlerd_loop(verbose);
 }
 
-int trawlerd_init(CURL **ch, zmq_socket_t *server, long verbose) {
+int trawlerd_init(CURL **ch, zctx_t **ctx_o, zmq_socket_t *server, long verbose) {
     int err;
     zctx_t *ctx;
     err = curl_global_init(CURL_GLOBAL_NOTHING);
@@ -46,6 +46,7 @@ int trawlerd_init(CURL **ch, zmq_socket_t *server, long verbose) {
     if( err != CURLE_OK )
         return err;
     ctx = zctx_new();
+    *ctx_o = ctx;
     *server = zsocket_new( ctx, ZMQ_ROUTER );
     const char *url = "tcp://*:"TOSTRING(TRAWLER_PORT);
     int port = zsocket_bind( *server, url );
@@ -64,6 +65,7 @@ int trawlerd_loop(long verbose) {
     int timeout;
     int64_t then, now;
     CURL *ch;
+    zctx_t *ctx;
     zmq_socket_t server;
     trawler_t trawler;
     trawler.sessions = zhash_new();
@@ -76,7 +78,7 @@ int trawlerd_loop(long verbose) {
     // the below call sets global state -- do not run multiple trawlerd_loops
     trawlerd_register_sighandler();
 
-    trawlerd_init( &ch, &server, verbose );
+    trawlerd_init( &ch, &ctx, &server, verbose );
 
     trawler.req_list = requests;
     trawler.src = server;
@@ -112,7 +114,7 @@ int trawlerd_loop(long verbose) {
         }
         trawlerd_reap( &trawler );
     }
-    return trawlerd_shutdown( &trawler, ch );
+    return trawlerd_shutdown( &trawler, &ctx, ch );
 }
 
 int trawlerd_receive( trawler_t *trawler ) {
@@ -439,11 +441,12 @@ static int trawlerd_reap_logout_fn(__attribute__((unused))const char *client_hex
     return 0;
 }
 
-static int trawlerd_shutdown(trawler_t *trawler, CURL *ch) {
+static int trawlerd_shutdown(trawler_t *trawler, zctx_t **ctx, CURL *ch) {
     zhash_foreach(trawler->sessions, trawlerd_reap_logout_fn, trawler);
     zhash_destroy( &(trawler->sessions) );
     trequest_list_destroy(&(trawler->req_list));
     zmq_close(trawler->src);
+    zctx_destroy( ctx );
     curl_easy_cleanup( ch );
     return 0;
 }
