@@ -42,7 +42,7 @@ int trawlerd_init(CURL **ch, zctx_t **ctx_o, zmq_socket_t *server, long verbose)
         return err;
     *ch = curl_easy_init();
     err = curl_easy_setopt(*ch, CURLOPT_VERBOSE, verbose);
-    err = curl_easy_setopt(*ch, CURLOPT_WRITEFUNCTION, trawlerd_response_append);
+    err = curl_easy_setopt(*ch, CURLOPT_WRITEFUNCTION, trawlerd_response_send);
     if( err != CURLE_OK )
         return err;
     ctx = zctx_new();
@@ -229,14 +229,9 @@ int trawlerd_update_last_activity(tsession_t *session) {
 int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq, 
                              trequest_t *treq) {
     treq->client = client;
-    trawler__reply__init(&(treq->reply));
-    treq->reply.req_id = treq->id = preq->id;
+    treq->id = preq->id;
     treq->method = preq->method;
     treq->path = strdup(preq->path);
-    treq->reply.headers.data = NULL;
-    treq->reply.headers.len = 0;
-    treq->reply.response.data = NULL;
-    treq->reply.response.len = 0;
     if( preq->query != NULL ) {
         treq->query = strdup(preq->query);
     } else {
@@ -253,8 +248,6 @@ int trawlerd_receive_request(zframe_t *client, Trawler__Request *preq,
 
 int trequest_destroy( trequest_t *treq ) {
     zframe_destroy( &(treq->client) );
-    free( treq->reply.headers.data );
-    free( treq->reply.response.data );
     free( treq->path );
     free( treq->query );
     free( treq->session );
@@ -329,8 +322,10 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
     char *client_hex = zframe_strhex(req->client);
     tsession_t *session = zhash_lookup(sessions, client_hex);
     char * user_agent = session->user_agent;
+    treply_t treply;
+    treply_init(&treply, ch, src, req);
     err |= curl_easy_setopt( ch, CURLOPT_USERAGENT, user_agent );
-    err |= curl_easy_setopt( ch, CURLOPT_WRITEDATA, req );
+    err |= curl_easy_setopt( ch, CURLOPT_WRITEDATA, &treply );
     switch( req->method ) {
     case GET:
         url = concat(TRAWLER_BASE_URL,req->path,"?",req->query);
@@ -347,50 +342,63 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
         return -1; /*TODO come up with return code for this 'impossible' case*/
     }
     err |= curl_easy_setopt( ch, CURLOPT_COOKIE, req->session );
-    req->reply.has_response = true;
+    treply.reply.has_response = true;
     if( req->headers ) {
-        curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, trawlerd_headers_append);
-        curl_easy_setopt( ch, CURLOPT_HEADERDATA, req );
-        req->reply.has_headers = true;
+        curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, trawlerd_headers_send);
+        curl_easy_setopt( ch, CURLOPT_HEADERDATA, &treply );
+        treply.reply.has_headers = true;
     } else {
         curl_easy_setopt( ch, CURLOPT_HEADERFUNCTION, NULL );
         curl_easy_setopt( ch, CURLOPT_HEADERDATA, NULL );
     }
     err |= curl_easy_perform( ch );
     free(url);
-    long result;
-    err |= curl_easy_getinfo( ch, CURLINFO_RESPONSE_CODE,
-                              &result );
-    req->reply.result = result;
     session->req_count--;
     free(client_hex);
-    return trawlerd_reply(src, req->client, &(req->reply));
+    treply.reply.has_continued = 1;
+    treply.reply.continued = 0;
+    return trawlerd_reply(src, req->client, &(treply.reply));
 }
 
-static inline int trawlerd_str_append( uint8_t **str, size_t *strlen, 
+int treply_init(treply_t *treply, CURL *ch, zmq_socket_t src, trequest_t *treq) {
+    treply_t *tr = treply;
+    tr->ch = ch;
+    trawler__reply__init(&(tr->reply));
+    tr->reply.headers.data = NULL;
+    tr->reply.headers.len = 0;
+    tr->reply.response.data = NULL;
+    tr->reply.response.len = 0;
+    tr->reply.req_id = treq->id;
+    tr->src = src;
+    tr->client = treq->client;
+    return 0;
+}
+
+static inline int trawlerd_str_send( treply_t *treply, ProtobufCBinaryData *str,
                                        const size_t size, const size_t nmemb,
                                        void *stream) {
-    uint8_t *cur = *str;
-    uint8_t *new = realloc( cur, *strlen + size*nmemb );
-    memmove( new+*strlen, stream, size*nmemb );
-    if( cur != new ) {
-        *str = new;
-    }
-    *strlen += size*nmemb;
+    long result;
+    curl_easy_getinfo( treply->ch, CURLINFO_RESPONSE_CODE, &result );
+    treply->reply.result = result;
+    treply->reply.has_continued = 1;
+    treply->reply.continued = 1;
+    str->data = stream;
+    str->len = size*nmemb;
+    trawlerd_reply( treply->src, treply->client, &(treply->reply));
+    str->data = NULL;
+    str->len = 0;
     return size*nmemb;
 }
 
-int trawlerd_headers_append(void *stream, size_t size, size_t nmemb,
-                            trequest_t *treq) {
-    return trawlerd_str_append( &(treq->reply.headers.data),
-                                &(treq->reply.headers.len),
+int trawlerd_headers_send(void *stream, size_t size, size_t nmemb,
+                            treply_t *treply) {
+    return trawlerd_str_send( treply, &(treply->reply.headers),
                                 size, nmemb, stream );
 }
 
-int trawlerd_response_append(void *stream, size_t size, size_t nmemb,
-                             trequest_t *treq) {
-    return trawlerd_str_append( &(treq->reply.response.data),
-                                &(treq->reply.response.len),
+int trawlerd_response_send(void *stream, size_t size, size_t nmemb,
+                             treply_t *treply) {
+    return trawlerd_str_send( treply, &(treply->reply.response),
                                 size, nmemb, stream );
 }
 

@@ -68,8 +68,6 @@ typedef enum {
 typedef struct trequest {
     /* identifier of client */
     zframe_t *client ;
-    /* reply being built for the response */
-    Trawler__Reply reply;
     /* arguments from client */
     int32_t id;
     method_t method;
@@ -78,6 +76,13 @@ typedef struct trequest {
     char *session;
     bool headers;
 } trequest_t;
+
+typedef struct treply {
+    CURL *ch;
+    zmq_socket_t src;
+    zframe_t *client;
+    Trawler__Reply reply;
+} treply_t;
 
 typedef struct trequest_node {
     trequest_t req;
@@ -120,10 +125,13 @@ int trawlerd_nack(zmq_socket_t src, zframe_t *client, int32_t req_id,
 int trawlerd_logout(zmq_socket_t src, zframe_t *client, int32_t result);
 int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions,
                              trequest_t *treq, CURL *ch);
-int trawlerd_headers_append(void *stream, size_t size, size_t nmemb, 
-                            trequest_t *treq);
-int trawlerd_response_append(void *stream, size_t size, size_t nmemb, 
-                             trequest_t *treq);
+
+int trawlerd_headers_send(void *stream, size_t size, size_t nmemb, 
+                          treply_t *treply);
+int trawlerd_response_send(void *stream, size_t size, size_t nmemb, 
+                           treply_t *treply);
+
+int treply_init(treply_t *treply, CURL *ch, zmq_socket_t src, trequest_t *treq);
 
 int trequest_destroy( trequest_t *req );
 
