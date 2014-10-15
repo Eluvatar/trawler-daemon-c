@@ -159,6 +159,7 @@ int trawlerd_receive( trawler_t *trawler ) {
         return 0;
     }
     if( preq->method == TRAWLER__REQUEST__METHOD__GET 
+        || preq->method == TRAWLER__REQUEST__METHOD__HEAD
         || preq->method == TRAWLER__REQUEST__METHOD__POST ) {
         trequest_node_t *node = calloc(1,sizeof(trequest_node_t));
         session->req_count++;
@@ -328,6 +329,11 @@ int trawlerd_fulfill_request(zmq_socket_t src, zhash_t *sessions, trequest_t *re
         url = concat(TRAWLER_BASE_URL,req->path,"?",req->query);
         err |= curl_easy_setopt( ch, CURLOPT_URL, url );
         err |= curl_easy_setopt( ch, CURLOPT_HTTPGET, 1 );
+        break;
+    case HEAD:
+        url = concat(TRAWLER_BASE_URL,req->path,"?",req->query);
+        err |= curl_easy_setopt( ch, CURLOPT_URL, url );
+        err |= curl_easy_setopt( ch, CURLOPT_NOBODY, 1 );
         break;
     case POST:
         url = concat(TRAWLER_BASE_URL,req->path,"","");
