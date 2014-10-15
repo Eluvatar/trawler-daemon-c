@@ -169,9 +169,6 @@ int trawlerd_receive( trawler_t *trawler ) {
         trawlerd_nack(src, client, preq->id, TRAWLER_NACK_UNSUPPORTED_METHOD);
         zframe_destroy( &client );
     }
-    free(preq->path);
-    free(preq->query);
-    free(preq->session);
     trawler__request__free_unpacked(preq, NULL);
     return 0;
 }
