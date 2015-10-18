@@ -17,7 +17,7 @@ $ sudo dnf install zeromq3 zeromq3-devel czmq czmq-devel libcurl libcurl-devel p
 $ sudo apt-get install libzmq3 libzmq3-dev libczmq3 libcmq-dev libcurl3 libcurl4-dev protobuf-c-compiler libprotobuf-c-dev
 ```
 
-#### Ubuntu (Does not work)
+#### Ubuntu
 (zmq versioning issues!) (May figure out a solution or patch trawler-daemon-c to work on Ubuntu D: )
 ```sh
 $ sudo apt-get install libcurl3 libcurl4-openssl-dev protobuf-c-compiler libprotobuf-c0-dev
