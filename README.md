@@ -20,7 +20,16 @@ $ sudo apt-get install libzmq3 libzmq3-dev libczmq3 libcmq-dev libcurl3 libcurl4
 #### Ubuntu (Does not work)
 (zmq versioning issues!) (May figure out a solution or patch trawler-daemon-c to work on Ubuntu D: )
 ```sh
-$ sudo apt-get install libzmq3 libzmq3-dev libcurl3 libcurl4-openssl-dev protobuf-c-compiler libprotobuf-c0-dev
+$ sudo apt-get install libcurl3 libcurl4-openssl-dev protobuf-c-compiler libprotobuf-c0-dev
+$ wget http://download.zeromq.org/zeromq-3.2.5.tar.gz
+$ tar -xzf zeromq-3.2.5.tar.gz
+$ cd zeromq-3.2.5
+$ ./autogen.sh
+$ ./configure
+$ make
+$ sudo make install
+$ sudo ldconfig
+$ cd ..
 $ wget http://download.zeromq.org/czmq-1.4.1.tar.gz
 $ tar -xzf czmq-1.4.1.tar.gz
 $ cd czmq-1.4.1
@@ -46,6 +55,16 @@ The daemon is compiled using make.
 $ make 
 ```
 
+To make the version of the daemon which runs against mock-nationstates, specify the testdaemon target.
+
+```sh
+$ make testdaemon
+```
+
 ### Running
 
 The daemon does not self-daemonize. Use a terminal multiplexer, daemonizing script, init scripts, or even systemd to run it in the background.
+
+To run against mock-nationstates, you will want to run the testdaemon binary.
+
+The only supported flag is `-v` which causes the daemon to turn libcurl into verbose mode, logging HTTP headers sent and received.A
